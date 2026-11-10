@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Desk Chaos</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: var(--tg-theme-bg-color, #1a1a2e);
+    color: var(--tg-theme-text-color, #eee);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;
+  }
+  #game-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  #hud {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.4);
+    font-size: 13px;
+    z-index: 100;
+  }
+  .bar-wrap { display: flex; align-items: center; gap: 6px; }
+  .bar {
+    width: 70px;
+    height: 12px;
+    background: #333;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .bar-fill { height: 100%; transition: width 0.15s; }
+  #thirst-fill { background: linear-gradient(90deg, #00c6ff, #0072ff); }
+  #stress-fill { background: linear-gradient(90deg, #ff416c, #ff4b2b); }
+  #score { font-weight: 700; color: #ffd700; font-size: 15px; }
+  
+  #desk-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    overflow: hidden;
+  }
+  #desk {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 3/4;
+    max-height: 100%;
+    background: linear-gradient(180deg, #4a3728 0%, #3d2b1f 100%);
+    border: 5px solid #2a1f15;
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  
+  #monitor {
+    position: absolute;
+    top: 4%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 62%;
+    height: 32%;
+    background: #111;
+    border: 6px solid #222;
+    border-radius: 6px;
+  }
+  #screen {
+    width: 100%;
+    height: 100%;
+    background: #0a0a12;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-family: monospace;
+    color: #0f0;
+    font-size: 11px;
+    text-align: center;
+    padding: 4px;
+  }
+  #screen.alert { animation: blink 0.25s infinite; }
+  @keyframes blink { 50% { background: #400; } }
+  
+  #mirror {
+    position: absolute;
+    top: 6%;
+    left: 3%;
+    width: 14%;
+    aspect-ratio: 2/3;
+    background: linear-gradient(135deg, #a0d0ff, #e0f0ff);
+    border: 4px solid #8b6914;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(18px, 5vw, 28px);
+    cursor: pointer;
+  }
+  #mirror.needed {
+    animation: pulse 0.4s infinite;
+    box-shadow: 0 0 18px #ff0;
+  }
+  @keyframes pulse {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+  
+  #phone {
+    position: absolute;
+    top: 42%;
+    right: 3%;
+    width: 11%;
+    aspect-ratio: 1/1.7;
+    background: #222;
+    border-radius: 8px;
+    border: 2px solid #444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(16px, 4.5vw, 24px);
+    cursor: pointer;
+  }
+  #phone.ringing {
+    animation: ring 0.18s infinite;
+    background: #500;
+    box-shadow: 0 0 16px #f00;
+  }
+  @keyframes ring {
+    0%,100% { transform: rotate(0); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+  }
+  
+  #glass {
+    position: absolute;
+    bottom: 22%;
+    left: 4%;
+    width: 11%;
+    aspect-ratio: 1/1.7;
+    background: linear-gradient(180deg, rgba(100,180,255,0.25) 0%, rgba(50,120,200,0.5) 100%);
+    border: 2px solid #88ccff;
+    border-radius: 0 0 12px 12px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(100,180,255,0.3);
+  }
+  #glass::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: var(--water, 70%);
+    background: linear-gradient(180deg, #4fc3f7, #0288d1);
+    border-radius: 0 0 10px 10px;
+    transition: height 0.25s;
+  }
+  #glass.needed {
+    animation: shake 0.35s infinite;
+    box-shadow: 0 0 18px #00e5ff;
+  }
+  @keyframes shake {
+    0%,100% { transform: rotate(0); }
+    25% { transform: rotate(-6deg); }
+    75% { transform: rotate(6deg); }
+  }
+  
+  #mouse {
+    position: absolute;
+    bottom: 18%;
+    right: 5%;
+    width: 14%;
+    aspect-ratio: 1/1.5;
+    background: #333;
+    border-radius: 40% 40% 30% 30%;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  #mouse-btn {
+    position: absolute;
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 55%;
+    height: 22%;
+    background: #555;
+    border-radius: 6px 6px 3px 3px;
+  }
+  #mouse.active #mouse-btn {
+    background: #0f0;
+    box-shadow: 0 0 12px #0f0;
+  }
+  #mouse.missed #mouse-btn {
+    background: #f00;
+    box-shadow: 0 0 12px #f00;
+  }
+  
+  #keyboard {
+    position: absolute;
+    bottom: 3%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 88%;
+    height: 22%;
+    background: #2a2a2a;
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 3%;
+    padding: 3%;
+  }
+  .key {
+    background: #444;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(12px, 3.5vw, 18px);
+    font-weight: 700;
+    color: #ccc;
+    cursor: pointer;
+    border: 2px solid #333;
+    transition: all 0.08s;
+  }
+  .key.active {
+    background: #ff0;
+    color: #000;
+    box-shadow: 0 0 12px #ff0;
+    transform: scale(1.08);
+  }
+  .key.missed {
+    background: #f00;
+    box-shadow: 0 0 12px #f00;
+  }
+  
+  #fly {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 50;
+    filter: drop-shadow(0 0 3px #000);
+    line-height: 1;
+  }
+  
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.88);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    text-align: center;
+    padding: 20px;
+  }
+  #overlay h1 {
+    font-size: clamp(28px, 8vw, 42px);
+    margin-bottom: 12px;
+    color: #ff416c;
+  }
+  #overlay p {
+    font-size: clamp(13px, 3.5vw, 16px);
+    max-width: 320px;
+    margin-bottom: 20px;
+    line-height: 1.45;
+    opacity: 0.9;
+  }
+  #start-btn, #retry-btn {
+    padding: 14px 36px;
+    font-size: 18px;
+    background: #ff416c;
+    border: none;
+    border-radius: 10px;
+    color: white;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  #start-btn:active, #retry-btn:active { transform: scale(0.96); }
+  
+  #hint {
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+    padding: 4px 8px 8px;
+    line-height: 1.3;
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <div id="hud">
+    <div class="bar-wrap">💧 <div class="bar"><div id="thirst-fill" class="bar-fill" style="width:30%"></div></div></div>
+    <div id="score">0</div>
+    <div class="bar-wrap">💢 <div class="bar"><div id="stress-fill" class="bar-fill" style="width:0%"></div></div></div>
+  </div>
+  
+  <div id="desk-wrap">
+    <div id="desk">
+      <div id="monitor"><div id="screen"><div>РАБОТАЙ</div><div style="font-size:9px;color:#0a0;margin-top:4px">deadline 3ч</div></div></div>
+      <div id="mirror">🪞</div>
+      <div id="phone">📱</div>
+      <div id="glass"></div>
+      <div id="mouse"><div id="mouse-btn"></div></div>
+      <div id="keyboard"></div>
+      <div id="fly">🪰</div>
+    </div>
+  </div>
+  
+  <div id="hint">Жми жёлтые кнопки • зелёную мышь • пей • муху • сбрасывай звонки • зеркало</div>
+  
+  <div id="overlay">
+    <h1>DESK CHAOS</h1>
+    <p>
+      Сидишь за столом. Всё горит.<br>
+      Жми кнопки, кликай мышь, пей воду,<br>
+      отгоняй муху, сбрасывай звонки<br>
+      и иногда пялься в зеркало.<br><br>
+      Стресс или жажда 100% = пиздец.
+    </p>
+    <button id="start-btn">ПОГНАЛИ</button>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+  try { tg.disableVerticalSwipes(); } catch(e) {}
+  document.body.style.background = tg.themeParams.bg_color || '#1a1a2e';
+}
+
+const KEYS = ['Q','W','E','R','A','S','D','F','Z','X','C','V'];
+const keyboard = document.getElementById('keyboard');
+const keyElements = {};
+
+KEYS.forEach(k => {
+  const el = document.createElement('div');
+  el.className = 'key';
+  el.textContent = k;
+  el.dataset.key = k;
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); handleKey(k); }, {passive:false});
+  el.addEventListener('click', () => handleKey(k));
+  keyboard.appendChild(el);
+  keyElements[k] = el;
+});
+
+let running = false;
+let score = 0;
+let thirst = 30;
+let stress = 0;
+let time = 0;
+let activeKey = null;
+let keyTimeout = null;
+let mouseActive = false;
+let mouseTimeout = null;
+let phoneRinging = false;
+let phoneTimeout = null;
+let mirrorNeeded = false;
+let mirrorTimeout = null;
+let fly = { x: 50, y: 40, vx: 1.2, vy: 0.9 };
+let lastDrink = 0;
+let difficulty = 1;
+
+const screen = document.getElementById('screen');
+const glass = document.getElementById('glass');
+const mouseEl = document.getElementById('mouse');
+const phone = document.getElementById('phone');
+const mirror = document.getElementById('mirror');
+const flyEl = document.getElementById('fly');
+const thirstFill = document.getElementById('thirst-fill');
+const stressFill = document.getElementById('stress-fill');
+const scoreEl = document.getElementById('score');
+const overlay = document.getElementById('overlay');
+
+function updateHUD() {
+  thirstFill.style.width = thirst + '%';
+  stressFill.style.width = stress + '%';
+  scoreEl.textContent = Math.floor(score);
+  glass.style.setProperty('--water', Math.max(8, 100 - thirst) + '%');
+}
+
+function addStress(amount) {
+  stress = Math.min(100, stress + amount);
+  updateHUD();
+  if (stress >= 100) gameOver('Стресс зашкалил. Ты сгорел.');
+}
+
+function addThirst(amount) {
+  thirst = Math.min(100, thirst + amount);
+  updateHUD();
+  if (thirst >= 100) gameOver('Засох. Стакан рядом стоял, гений.');
+}
+
+function handleKey(k) {
+  if (!running || activeKey !== k) return;
+  clearTimeout(keyTimeout);
+  keyElements[k].classList.remove('active');
+  activeKey = null;
+  score += 10 * difficulty;
+  updateHUD();
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+}
+
+function spawnKey() {
+  if (!running || activeKey) return;
+  const k = KEYS[Math.floor(Math.random() * KEYS.length)];
+  activeKey = k;
+  keyElements[k].classList.add('active');
+  const timeout = Math.max(1100, 2400 - difficulty * 90);
+  keyTimeout = setTimeout(() => {
+    if (activeKey === k) {
+      keyElements[k].classList.remove('active');
+      keyElements[k].classList.add('missed');
+      setTimeout(() => keyElements[k].classList.remove('missed'), 280);
+      activeKey = null;
+      addStress(11 + difficulty);
+      screen.classList.add('alert');
+      setTimeout(() => screen.classList.remove('alert'), 350);
+    }
+  }, timeout);
+}
+
+function spawnMouse() {
+  if (!running || mouseActive) return;
+  mouseActive = true;
+  mouseEl.classList.add('active');
+  const timeout = Math.max(1200, 2600 - difficulty * 80);
+  mouseTimeout = setTimeout(() => {
+    if (mouseActive) {
+      mouseEl.classList.remove('active');
+      mouseEl.classList.add('missed');
+      setTimeout(() => mouseEl.classList.remove('missed'), 280);
+      mouseActive = false;
+      addStress(9 + difficulty);
+    }
+  }, timeout);
+}
+
+function spawnPhone() {
+  if (!running || phoneRinging) return;
+  phoneRinging = true;
+  phone.classList.add('ringing');
+  const timeout = Math.max(1600, 3600 - difficulty * 55);
+  phoneTimeout = setTimeout(() => {
+    if (phoneRinging) {
+      phone.classList.remove('ringing');
+      phoneRinging = false;
+      addStress(14 + difficulty * 1.4);
+      screen.innerHTML = '<div style="color:#f44">ПРОЕБАЛ</div>';
+      setTimeout(() => {
+        screen.innerHTML = '<div>РАБОТАЙ</div><div style="font-size:9px;color:#0a0;margin-top:4px">deadline 3ч</div>';
+      }, 700);
+    }
+  }, timeout);
+}
+
+function spawnMirror() {
+  if (!running || mirrorNeeded) return;
+  mirrorNeeded = true;
+  mirror.classList.add('needed');
+  const timeout = Math.max(2000, 4200 - difficulty * 45);
+  mirrorTimeout = setTimeout(() => {
+    if (mirrorNeeded) {
+      mirror.classList.remove('needed');
+      mirrorNeeded = false;
+      addStress(7 + difficulty);
+    }
+  }, timeout);
+}
+
+function checkGlassNeeded() {
+  if (thirst > 52) glass.classList.add('needed');
+  else glass.classList.remove('needed');
+}
+
+mouseEl.addEventListener('touchstart', e => { e.preventDefault(); clickMouse(); }, {passive:false});
+mouseEl.addEventListener('click', clickMouse);
+function clickMouse() {
+  if (!running || !mouseActive) return;
+  clearTimeout(mouseTimeout);
+  mouseEl.classList.remove('active');
+  mouseActive = false;
+  score += 14 * difficulty;
+  updateHUD();
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+}
+
+glass.addEventListener('touchstart', e => { e.preventDefault(); clickGlass(); }, {passive:false});
+glass.addEventListener('click', clickGlass);
+function clickGlass() {
+  if (!running) return;
+  thirst = Math.max(0, thirst - 32);
+  glass.classList.remove('needed');
+  score += 5;
+  updateHUD();
+  lastDrink = time;
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+}
+
+phone.addEventListener('touchstart', e => { e.preventDefault(); clickPhone(); }, {passive:false});
+phone.addEventListener('click', clickPhone);
+function clickPhone() {
+  if (!running || !phoneRinging) return;
+  clearTimeout(phoneTimeout);
+  phone.classList.remove('ringing');
+  phoneRinging = false;
+  score += 18 * difficulty;
+  updateHUD();
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+}
+
+mirror.addEventListener('touchstart', e => { e.preventDefault(); clickMirror(); }, {passive:false});
+mirror.addEventListener('click', clickMirror);
+function clickMirror() {
+  if (!running || !mirrorNeeded) return;
+  clearTimeout(mirrorTimeout);
+  mirror.classList.remove('needed');
+  mirrorNeeded = false;
+  score += 11 * difficulty;
+  stress = Math.max(0, stress - 6);
+  updateHUD();
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+}
+
+flyEl.addEventListener('touchstart', e => { e.preventDefault(); swatFly(); }, {passive:false});
+flyEl.addEventListener('click', swatFly);
+function swatFly() {
+  if (!running) return;
+  fly.x = 15 + Math.random() * 70;
+  fly.y = 15 + Math.random() * 55;
+  fly.vx = (Math.random() - 0.5) * 3.5;
+  fly.vy = (Math.random() - 0.5) * 3.5;
+  score += 7;
+  stress = Math.max(0, stress - 2);
+  updateHUD();
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('rigid');
+}
+
+function updateFly() {
+  if (!running) return;
+  fly.x += fly.vx;
+  fly.y += fly.vy;
+  if (fly.x < 5 || fly.x > 90) fly.vx *= -1;
+  if (fly.y < 5 || fly.y > 85) fly.vy *= -1;
+  if (Math.random() < 0.025) {
+    fly.vx += (Math.random() - 0.5) * 1.5;
+    fly.vy += (Math.random() - 0.5) * 1.5;
+    const sp = Math.sqrt(fly.vx*fly.vx + fly.vy*fly.vy);
+    if (sp > 3.2) { fly.vx *= 3.2/sp; fly.vy *= 3.2/sp; }
+  }
+  flyEl.style.left = fly.x + '%';
+  flyEl.style.top = fly.y + '%';
+}
+
+function gameLoop() {
+  if (!running) return;
+  time += 16;
+  score += 0.04 * difficulty;
+  if (time - lastDrink > 1800) addThirst(0.07 * difficulty);
+  checkGlassNeeded();
+  updateFly();
+  updateHUD();
+  difficulty = 1 + time / 22000;
+  
+  if (Math.random() < 0.011 * difficulty) spawnKey();
+  if (Math.random() < 0.0075 * difficulty) spawnMouse();
+  if (Math.random() < 0.0048 * difficulty) spawnPhone();
+  if (Math.random() < 0.0038 * difficulty) spawnMirror();
+  
+  requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+  running = true;
+  score = 0; thirst = 30; stress = 0; time = 0; difficulty = 1;
+  activeKey = null; mouseActive = false; phoneRinging = false; mirrorNeeded = false;
+  lastDrink = 0;
+  fly = { x: 50, y: 35, vx: 1.2, vy: 0.9 };
+  
+  Object.values(keyElements).forEach(el => el.classList.remove('active', 'missed'));
+  mouseEl.classList.remove('active', 'missed');
+  phone.classList.remove('ringing');
+  mirror.classList.remove('needed');
+  glass.classList.remove('needed');
+  screen.classList.remove('alert');
+  screen.innerHTML = '<div>РАБОТАЙ</div><div style="font-size:9px;color:#0a0;margin-top:4px">deadline 3ч</div>';
+  
+  overlay.style.display = 'none';
+  updateHUD();
+  requestAnimationFrame(gameLoop);
+  if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+}
+
+function gameOver(reason) {
+  running = false;
+  clearTimeout(keyTimeout); clearTimeout(mouseTimeout);
+  clearTimeout(phoneTimeout); clearTimeout(mirrorTimeout);
+  
+  const sec = Math.floor(time / 1000);
+  overlay.innerHTML = `
+    <h1>ПИЗДЕЦ</h1>
+    <p>${reason}<br><br>Продержался ${sec} сек<br>Счёт: ${Math.floor(score)}</p>
+    <button id="retry-btn">ЕЩЁ РАЗ</button>
+  `;
+  overlay.style.display = 'flex';
+  document.getElementById('retry-btn').onclick = startGame;
+  
+  if (tg) {
+    try {
+      tg.sendData(JSON.stringify({ score: Math.floor(score), time: sec }));
+    } catch(e) {}
+    if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+  }
+}
+
+document.getElementById('start-btn').onclick = startGame;
+
+document.addEventListener('keydown', e => {
+  if (!running) return;
+  const k = e.key.toUpperCase();
+  if (KEYS.includes(k)) handleKey(k);
+});
+</script>
+</body>
+</html>
